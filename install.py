@@ -657,107 +657,136 @@ def _show_installer_ui(defaults):
             pass
         return None
 
+    # --- 一貫した限定パレット (洗練の土台) ---
+    BG, CARD, FIELD = "#1e2024", "#2a2d31", "#16171a"
+    FG, MUTE, LINE = "#e8eaed", "#9aa0a6", "#3a3d42"
+    ACCENT, ACCENT_H = "#4f8fd0", "#5fa0e0"
+    OKC, ERRC = "#3fae6e", "#e0574d"
+
     CSS = (
-        "QDialog{background:#2b2b2b;}"
-        "QLabel{color:#ddd;}"
-        "QLabel#title{color:#fff;font-size:15px;font-weight:bold;}"
-        "QLabel#hint{color:#8a8a8a;font-size:11px;}"
-        "QLineEdit,QComboBox{background:#1e1e1e;color:#eee;border:1px solid #444;"
-        "border-radius:4px;padding:5px;}"
-        "QLineEdit:focus,QComboBox:focus{border:1px solid #5a8adb;}"
-        "QPlainTextEdit{background:#171717;color:#bcd;border:1px solid #333;"
-        "border-radius:4px;font-family:Consolas,monospace;font-size:11px;}"
-        "QPushButton{background:#3a3a3a;color:#eee;border:1px solid #555;"
-        "border-radius:4px;padding:7px 14px;}"
-        "QPushButton:hover{background:#454545;}"
-        "QPushButton#primary{background:#3d6fb4;border:1px solid #3d6fb4;font-weight:bold;}"
-        "QPushButton#primary:hover{background:#4a82cf;}"
-        "QCheckBox{color:#bbb;}"
-    )
+        "QDialog{background:%(BG)s;}"
+        "QLabel{color:%(FG)s;font-size:12px;}"
+        "QLabel#title{color:#ffffff;font-size:16px;font-weight:600;}"
+        "QLabel#sub{color:%(MUTE)s;font-size:11px;}"
+        "QLabel#flabel{color:%(MUTE)s;font-size:11px;}"
+        "#card{background:%(CARD)s;border:1px solid %(LINE)s;border-radius:8px;}"
+        "QLineEdit,QComboBox{background:%(FIELD)s;color:%(FG)s;border:1px solid %(LINE)s;"
+        "border-radius:6px;padding:7px 9px;font-size:12px;selection-background-color:%(ACCENT)s;}"
+        "QLineEdit:focus,QComboBox:focus{border:1px solid %(ACCENT)s;}"
+        "QComboBox::drop-down{border:0;width:18px;}"
+        "QPlainTextEdit{background:%(FIELD)s;color:#aeb6c2;border:1px solid %(LINE)s;"
+        "border-radius:6px;padding:6px;font-family:Consolas,'Courier New',monospace;font-size:11px;}"
+        "QPushButton{background:transparent;color:%(MUTE)s;border:1px solid %(LINE)s;"
+        "border-radius:6px;padding:8px 16px;font-size:12px;}"
+        "QPushButton:hover{color:%(FG)s;border-color:#55585e;}"
+        "QPushButton#primary{background:%(ACCENT)s;color:#ffffff;border:0;font-weight:600;padding:9px 20px;}"
+        "QPushButton#primary:hover{background:%(ACCENT_H)s;}"
+        "QPushButton#primary:disabled{background:#3a4047;color:#7d828a;}"
+        "QToolButton{background:transparent;color:%(MUTE)s;border:0;font-size:11px;padding:2px;}"
+        "QToolButton:hover{color:%(FG)s;}"
+    ) % dict(BG=BG, CARD=CARD, FIELD=FIELD, FG=FG, MUTE=MUTE, LINE=LINE, ACCENT=ACCENT, ACCENT_H=ACCENT_H)
 
     dlg = QtWidgets.QDialog(_maya_main_window())
     dlg.setWindowTitle("MayaTools インストーラ")
     dlg.setStyleSheet(CSS)
-    dlg.setMinimumWidth(520)
+    dlg.setMinimumWidth(470)
     root = QtWidgets.QVBoxLayout(dlg)
-    root.setContentsMargins(18, 16, 18, 16)
-    root.setSpacing(10)
+    root.setContentsMargins(22, 20, 22, 18)
+    root.setSpacing(16)
 
-    title = QtWidgets.QLabel("MayaTools をこの PC にインストール")
-    title.setObjectName("title")
-    root.addWidget(title)
-    sub = QtWidgets.QLabel("トークンと置き場を入れて [インストール] を押すだけ。"
-                           "完了したら Maya を再起動してください。")
-    sub.setObjectName("hint")
-    sub.setWordWrap(True)
-    root.addWidget(sub)
+    # --- ヘッダー (明快な階層: 大きな見出し + 控えめな説明) ---
+    head = QtWidgets.QVBoxLayout(); head.setSpacing(3)
+    title = QtWidgets.QLabel("MayaTools をインストール"); title.setObjectName("title")
+    sub = QtWidgets.QLabel("トークンと置き場を入れて [インストール]。完了したら Maya を再起動します。")
+    sub.setObjectName("sub"); sub.setWordWrap(True)
+    head.addWidget(title); head.addWidget(sub)
+    root.addLayout(head)
 
-    form = QtWidgets.QFormLayout()
-    form.setLabelAlignment(QtCore.Qt.AlignRight)
-    form.setSpacing(8)
+    # --- 入力カード (関連項目をひとまとめ) ---
+    card = QtWidgets.QFrame(); card.setObjectName("card")
+    cl = QtWidgets.QVBoxLayout(card); cl.setContentsMargins(16, 14, 16, 14); cl.setSpacing(12)
 
+    def _label(text):
+        lab = QtWidgets.QLabel(text); lab.setObjectName("flabel"); return lab
+
+    # token (ラベルは上・フィールドは全幅)
+    cl.addWidget(_label("GitHub Token"))
     ed_token = QtWidgets.QLineEdit(defaults.get("token", "") or "")
     ed_token.setEchoMode(QtWidgets.QLineEdit.Password)
     ed_token.setPlaceholderText("空のままなら既存のトークンを温存")
-    cb_show = QtWidgets.QCheckBox("表示")
+    btn_eye = QtWidgets.QToolButton(); btn_eye.setCheckable(True); btn_eye.setText("表示")
+    btn_eye.setCursor(QtCore.Qt.PointingHandCursor)
     def _toggle_echo(on):
         ed_token.setEchoMode(QtWidgets.QLineEdit.Normal if on else QtWidgets.QLineEdit.Password)
-    cb_show.toggled.connect(_toggle_echo)
-    tok_row = QtWidgets.QHBoxLayout()
-    tok_row.addWidget(ed_token, 1)
-    tok_row.addWidget(cb_show)
-    form.addRow("GitHub Token:", tok_row)
+        btn_eye.setText("隠す" if on else "表示")
+    btn_eye.toggled.connect(_toggle_echo)
+    trow = QtWidgets.QHBoxLayout(); trow.setSpacing(8)
+    trow.addWidget(ed_token, 1); trow.addWidget(btn_eye)
+    cl.addLayout(trow)
 
+    # cache
+    cl.addWidget(_label("置き場 (ツールの保存先)"))
     ed_cache = QtWidgets.QLineEdit(defaults.get("cache_dir", "") or "~/dev/MayaTools")
     ed_cache.setPlaceholderText("空=%LOCALAPPDATA%\\MayaTools")
-    form.addRow("置き場:", ed_cache)
-    root.addLayout(form)
+    cl.addWidget(ed_cache)
 
-    # 詳細 (repo / mode) — 折りたたみ
-    adv = QtWidgets.QGroupBox("詳細 (通常は変更不要)")
-    adv.setCheckable(True)
-    adv.setChecked(False)
-    adv_form = QtWidgets.QFormLayout(adv)
+    # 詳細 (累進的開示: 既定は畳んでおく)
+    btn_adv = QtWidgets.QToolButton(); btn_adv.setCheckable(True); btn_adv.setText("▸ 詳細 (repo / mode)")
+    btn_adv.setCursor(QtCore.Qt.PointingHandCursor)
+    adv_box = QtWidgets.QWidget()
+    af = QtWidgets.QFormLayout(adv_box); af.setContentsMargins(0, 6, 0, 0); af.setSpacing(8)
+    af.setLabelAlignment(QtCore.Qt.AlignRight)
     ed_owner = QtWidgets.QLineEdit(defaults.get("owner", ""))
     ed_repo = QtWidgets.QLineEdit(defaults.get("repo", ""))
-    cmb_mode = QtWidgets.QComboBox()
-    cmb_mode.addItems(["release", "zipball"])
+    cmb_mode = QtWidgets.QComboBox(); cmb_mode.addItems(["release", "zipball"])
     cmb_mode.setCurrentText(defaults.get("source_mode", "release"))
     ed_ref = QtWidgets.QLineEdit(defaults.get("ref", "main"))
-    adv_form.addRow("owner:", ed_owner)
-    adv_form.addRow("repo:", ed_repo)
-    adv_form.addRow("mode:", cmb_mode)
-    adv_form.addRow("ref:", ed_ref)
-    body = adv.findChildren(QtWidgets.QWidget)
+    af.addRow("owner", ed_owner); af.addRow("repo", ed_repo)
+    af.addRow("mode", cmb_mode); af.addRow("ref", ed_ref)
+    adv_box.setVisible(False)
     def _toggle_adv(on):
-        for w in body:
-            w.setVisible(on)
-    adv.toggled.connect(_toggle_adv)
-    _toggle_adv(False)
-    root.addWidget(adv)
+        adv_box.setVisible(on); btn_adv.setText(("▾" if on else "▸") + " 詳細 (repo / mode)")
+    btn_adv.toggled.connect(_toggle_adv)
+    cl.addWidget(btn_adv, 0, QtCore.Qt.AlignLeft); cl.addWidget(adv_box)
+    root.addWidget(card)
 
-    log_view = QtWidgets.QPlainTextEdit()
-    log_view.setReadOnly(True)
-    log_view.setFixedHeight(150)
-    log_view.setPlaceholderText("ログがここに出ます…")
-    root.addWidget(log_view)
-
-    btn_row = QtWidgets.QHBoxLayout()
-    btn_row.addStretch(1)
-    btn_close = QtWidgets.QPushButton("閉じる")
-    btn_install = QtWidgets.QPushButton("インストール")
-    btn_install.setObjectName("primary")
-    btn_row.addWidget(btn_close)
-    btn_row.addWidget(btn_install)
-    root.addLayout(btn_row)
-
-    def _log(msg):
-        log_view.appendPlainText(str(msg))
+    # --- ステータスバナー (状態を色で即伝える。初期は非表示) ---
+    status = QtWidgets.QLabel(""); status.setVisible(False); status.setWordWrap(True)
+    root.addWidget(status)
+    def _set_status(kind, text):
+        col = {"run": ACCENT, "ok": OKC, "err": ERRC}.get(kind, ACCENT)
+        bg = {"run": "#22303f", "ok": "#1f3a2c", "err": "#3a2624"}.get(kind, "#22303f")
+        status.setStyleSheet("background:%s;border:1px solid %s;border-radius:6px;"
+                             "color:#eef1f4;font-size:12px;padding:9px 12px;" % (bg, col))
+        status.setText(text); status.setVisible(True)
         QtWidgets.QApplication.processEvents()
 
+    # --- ログ (既定は畳む。必要な人だけ開く) ---
+    btn_log = QtWidgets.QToolButton(); btn_log.setCheckable(True); btn_log.setText("▸ ログ")
+    btn_log.setCursor(QtCore.Qt.PointingHandCursor)
+    log_view = QtWidgets.QPlainTextEdit(); log_view.setReadOnly(True)
+    log_view.setFixedHeight(120); log_view.setVisible(False)
+    def _toggle_log(on):
+        log_view.setVisible(on); btn_log.setText(("▾" if on else "▸") + " ログ")
+    btn_log.toggled.connect(_toggle_log)
+    root.addWidget(btn_log, 0, QtCore.Qt.AlignLeft); root.addWidget(log_view)
+
+    # --- フッター (主要操作=アクセント色で1つだけ際立たせる) ---
+    foot = QtWidgets.QHBoxLayout(); foot.addStretch(1)
+    btn_close = QtWidgets.QPushButton("閉じる")
+    btn_install = QtWidgets.QPushButton("インストール"); btn_install.setObjectName("primary")
+    btn_install.setCursor(QtCore.Qt.PointingHandCursor)
+    foot.addWidget(btn_close); foot.addWidget(btn_install)
+    root.addLayout(foot)
+
+    def _log(msg):
+        log_view.appendPlainText(str(msg)); QtWidgets.QApplication.processEvents()
+
     def _on_install():
-        btn_install.setEnabled(False)
-        log_view.clear()
+        btn_install.setEnabled(False); log_view.clear()
+        if not btn_log.isChecked():
+            btn_log.setChecked(True)
+        _set_status("run", "インストール中…")
         _log("インストール開始…")
         try:
             res = _run_install(
@@ -770,16 +799,16 @@ def _show_installer_ui(defaults):
                 run_sync=defaults.get("run_sync", True),
                 log=_log,
             )
-            _log("")
             if res.get("synced"):
-                _log("✓ 完了しました。Maya を再起動してください。")
+                _set_status("ok", "✓ 完了しました。Maya を再起動してください。")
             elif not res.get("token_set"):
-                _log("△ bootstrap は設置済。トークンを入れて再実行すると本体も取得します。")
+                _set_status("run", "bootstrap は設置済。トークンを入れて再実行すると本体も取得します。")
             else:
-                _log("△ 設置は完了。本体取得は update.log を確認してください。")
+                _set_status("ok", "設置は完了。本体取得は update.log を確認してください。")
         except Exception:
             import traceback
-            _log("✗ エラー:\n" + traceback.format_exc())
+            _set_status("err", "✗ エラーが発生しました。ログを確認してください。")
+            _log(traceback.format_exc())
         finally:
             btn_install.setEnabled(True)
 
