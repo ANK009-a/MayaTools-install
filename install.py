@@ -657,11 +657,13 @@ def _show_installer_ui(defaults):
             pass
         return None
 
-    # --- パレット (ツールと共通: 背景 #2b2b2b / 入力欄 #3a3a3a) ---
-    BG, CARD, FIELD = "#2b2b2b", "#2b2b2b", "#3a3a3a"
-    FG, MUTE, LINE = "#e8e8e8", "#9a9a9a", "#3a3a3a"
+    # --- パレット (scripts/mtui.py と同じ統一トークン。install.py は自己完結ゆえ値を複製) ---
+    #   深さ3段: 背景#2b2b2b → カード#3a3a3a → 入力欄#2a2a2a(沈める)。青#4f8fd0 / 角丸4px。
+    BG, CARD, FIELD = "#2b2b2b", "#3a3a3a", "#2a2a2a"
+    FG, MUTE = "#e0e0e0", "#a0a0a0"
+    LINE, DIVIDER = "#1f1f1f", "#555555"
     ACCENT, ACCENT_H = "#4f8fd0", "#5fa0e0"
-    OKC, ERRC, LOGBG = "#3fae6e", "#e0574d", "#242424"
+    OKC, ERRC, LOGBG = "#4caf50", "#dc3545", "#242424"
 
     CSS = (
         "QDialog{background:%(BG)s;}"
@@ -669,22 +671,22 @@ def _show_installer_ui(defaults):
         "QLabel#title{color:#ffffff;font-size:16px;font-weight:600;}"
         "QLabel#sub{color:%(MUTE)s;font-size:11px;}"
         "QLabel#flabel{color:%(MUTE)s;font-size:11px;}"
-        "#card{background:%(CARD)s;border:1px solid %(LINE)s;border-radius:8px;}"
+        "#card{background:%(CARD)s;border:1px solid %(LINE)s;border-radius:4px;}"
         "QLineEdit,QComboBox{background:%(FIELD)s;color:%(FG)s;border:1px solid %(LINE)s;"
-        "border-radius:6px;padding:7px 9px;font-size:12px;selection-background-color:%(ACCENT)s;}"
+        "border-radius:4px;padding:7px 9px;font-size:12px;selection-background-color:%(ACCENT)s;}"
         "QLineEdit:focus,QComboBox:focus{border:1px solid %(ACCENT)s;}"
         "QComboBox::drop-down{border:0;width:18px;}"
         "QPlainTextEdit{background:%(LOGBG)s;color:#c8ccd2;border:1px solid %(LINE)s;"
-        "border-radius:6px;padding:6px;font-family:Consolas,'Courier New',monospace;font-size:11px;}"
-        "QPushButton{background:transparent;color:%(MUTE)s;border:1px solid %(LINE)s;"
-        "border-radius:6px;padding:8px 16px;font-size:12px;}"
-        "QPushButton:hover{color:%(FG)s;border-color:#555555;}"
+        "border-radius:4px;padding:6px;font-family:Consolas,'Courier New',monospace;font-size:11px;}"
+        "QPushButton{background:transparent;color:%(MUTE)s;border:1px solid %(DIVIDER)s;"
+        "border-radius:4px;padding:8px 16px;font-size:12px;}"
+        "QPushButton:hover{color:%(FG)s;border-color:#6a6a6a;}"
         "QPushButton#primary{background:%(ACCENT)s;color:#ffffff;border:0;font-weight:600;padding:9px 20px;}"
         "QPushButton#primary:hover{background:%(ACCENT_H)s;}"
         "QPushButton#primary:disabled{background:#3a3a3a;color:#7d7d7d;}"
         "QToolButton{background:transparent;color:%(MUTE)s;border:0;font-size:11px;padding:2px;}"
         "QToolButton:hover{color:%(FG)s;}"
-    ) % dict(BG=BG, CARD=CARD, FIELD=FIELD, FG=FG, MUTE=MUTE, LINE=LINE,
+    ) % dict(BG=BG, CARD=CARD, FIELD=FIELD, FG=FG, MUTE=MUTE, LINE=LINE, DIVIDER=DIVIDER,
              ACCENT=ACCENT, ACCENT_H=ACCENT_H, LOGBG=LOGBG)
 
     dlg = QtWidgets.QDialog(_maya_main_window())
