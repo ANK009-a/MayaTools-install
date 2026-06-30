@@ -530,8 +530,8 @@ def _default_cache():
     return os.path.join(base, "MayaTools")
 
 
-def _detect_existing_token(cache_dir):
-    """指定の置き場 (or 旧 modules) に既存トークンが設定済みか。UI のヒント出し分け用。"""
+def _get_existing_token(cache_dir):
+    """指定の置き場 (or 旧 modules) の既存 token 文字列を返す (無ければ '')。UI のヒント用。"""
     new_cache = _expand(cache_dir) if cache_dir else _default_cache()
     cands = [os.path.join(new_cache, "bootstrap", "config.json")]
     try:
@@ -542,11 +542,40 @@ def _detect_existing_token(cache_dir):
     for c in cands:
         if os.path.isfile(c):
             try:
-                if (json.load(open(c, encoding="utf-8")).get("token") or "").strip():
-                    return True
+                t = (json.load(open(c, encoding="utf-8")).get("token") or "").strip()
+                if t:
+                    return t
             except Exception:
                 pass
-    return False
+    return ""
+
+
+def _check_token_validity(owner, repo, source_mode, ref, token):
+    """GitHub に token の有効性を問い合わせる (UI のヒント用)。
+    返り値: 'valid' / 'invalid'(401) / 'noaccess'(403/404) / 'unknown'(オフライン等) / 'none'。"""
+    if not token:
+        return "none"
+    import urllib.request
+    import urllib.error
+    if source_mode == "release":
+        url = "https://api.github.com/repos/%s/%s/releases/latest" % (owner, repo)
+    else:
+        url = "https://api.github.com/repos/%s/%s/commits/%s" % (owner, repo, ref or "main")
+    req = urllib.request.Request(url)
+    req.add_header("Authorization", "Bearer " + token)
+    req.add_header("Accept", "application/vnd.github+json")
+    req.add_header("User-Agent", "MayaTools-installer")
+    try:
+        urllib.request.urlopen(req, timeout=8).read(1)
+        return "valid"
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            return "invalid"
+        if e.code in (403, 404):
+            return "noaccess"
+        return "unknown"
+    except Exception:
+        return "unknown"
 
 
 def _set_maya_env_cache(env_path, remove_paths, add_paths):
@@ -812,17 +841,62 @@ def _show_installer_ui(defaults):
     ed_cache.setPlaceholderText("空=%LOCALAPPDATA%\\MayaTools")
     cl.addWidget(ed_cache)
 
-    # 既存トークンの有無で Token 欄の表示を出し分け (token 無し = ツールは読み込まれない)
-    def _update_token_hint():
-        if _detect_existing_token(ed_cache.text().strip()):
-            ed_token.setPlaceholderText("空のままなら既存のトークンを温存")
-            hint_token.setText("✓ 既存トークンあり — 空欄のままなら維持されます")
-            hint_token.setStyleSheet("color:#5fae7a;font-size:11px;")
+    # Token のヒント: 入力欄に値があればそれを、無ければ既存 token を、GitHub に問い合わせて
+    # 「有効性」まで確認して出し分ける (✓有効 / ✗無効 / ⚠アクセス不可 / 確認中 / なし)。
+    _tok_state = {"gen": 0, "label": "既存トークン"}
+
+    def _hint(kind, text):
+        col = {"ok": "#5fae7a", "err": "#e0574d", "warn": "#d8a23a", "mute": "#9a9a9a"}.get(kind, "#9a9a9a")
+        hint_token.setStyleSheet("color:%s;font-size:11px;" % col)
+        hint_token.setText(text)
+
+    class _TokSig(QtCore.QObject):
+        done = QtCore.Signal(int, str)
+    _toksig = _TokSig()
+
+    def _on_checked(gen, result):
+        if gen != _tok_state["gen"]:
+            return  # より新しい確認が走っているので破棄
+        label = _tok_state["label"]
+        keep = "（空欄で維持）" if label == "既存トークン" else ""
+        if result == "valid":
+            _hint("ok", "✓ %s は有効です%s" % (label, keep))
+        elif result == "invalid":
+            _hint("err", "✗ %s が無効です（失効/revoke 等）— 有効なトークンを入力してください" % label)
+        elif result == "noaccess":
+            _hint("warn", "⚠ %s はこの配布 repo にアクセスできません（権限/repo 名を確認）" % label)
         else:
+            _hint("mute", "%s あり（有効性は未確認・オフライン）" % label)
+    _toksig.done.connect(_on_checked)
+
+    def _update_token_hint():
+        _tok_state["gen"] += 1
+        gen = _tok_state["gen"]
+        typed = ed_token.text().strip()
+        if typed:
+            tok = typed; _tok_state["label"] = "入力したトークン"
+            ed_token.setPlaceholderText("空のままなら既存のトークンを温存")
+        else:
+            tok = _get_existing_token(ed_cache.text().strip()); _tok_state["label"] = "既存トークン"
+        if not tok:
             ed_token.setPlaceholderText("トークンを貼り付け（新規・必須）")
-            hint_token.setText("⚠ 既存トークンなし — 入力しないとツールは読み込まれません")
-            hint_token.setStyleSheet("color:#d8a23a;font-size:11px;")
+            _hint("warn", "⚠ トークンがありません — 入力しないとツールは読み込まれません")
+            return
+        _hint("mute", "🔍 %s を確認中…" % _tok_state["label"])
+        args = (defaults.get("owner", ""), defaults.get("repo", ""),
+                defaults.get("source_mode", "release"), defaults.get("ref", "main"), tok)
+
+        def _work():
+            try:
+                r = _check_token_validity(*args)
+            except Exception:
+                r = "unknown"
+            _toksig.done.emit(gen, r)
+        import threading
+        threading.Thread(target=_work, name="MTTokenCheck", daemon=True).start()
+
     ed_cache.editingFinished.connect(_update_token_hint)
+    ed_token.editingFinished.connect(_update_token_hint)
     _update_token_hint()
 
     # 詳細 (累進的開示: 既定は畳んでおく)
