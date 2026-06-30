@@ -694,6 +694,12 @@ def _show_installer_ui(defaults):
     root.setContentsMargins(22, 20, 22, 18)
     root.setSpacing(16)
 
+    def _refit():
+        # 展開/折りたたみ後にウィンドウを内容の高さへフィットし直す。
+        # これが無いと「展開→折りたたみ」で余った高さが隙間として残る (縮まらない)。
+        root.activate()
+        dlg.resize(dlg.width(), dlg.sizeHint().height())
+
     # --- ヘッダー (明快な階層: 大きな見出し + 控えめな説明) ---
     head = QtWidgets.QVBoxLayout(); head.setSpacing(3)
     title = QtWidgets.QLabel("MayaTools をインストール"); title.setObjectName("title")
@@ -746,6 +752,7 @@ def _show_installer_ui(defaults):
     adv_box.setVisible(False)
     def _toggle_adv(on):
         adv_box.setVisible(on); btn_adv.setText(("▾" if on else "▸") + " 詳細 (repo / mode)")
+        _refit()
     btn_adv.toggled.connect(_toggle_adv)
     cl.addWidget(btn_adv, 0, QtCore.Qt.AlignLeft); cl.addWidget(adv_box)
     root.addWidget(card)
@@ -759,6 +766,7 @@ def _show_installer_ui(defaults):
         status.setStyleSheet("background:%s;border:1px solid %s;border-radius:6px;"
                              "color:#eef1f4;font-size:12px;padding:9px 12px;" % (bg, col))
         status.setText(text); status.setVisible(True)
+        _refit()
         QtWidgets.QApplication.processEvents()
 
     # --- ログ (既定は畳む。必要な人だけ開く) ---
@@ -768,10 +776,12 @@ def _show_installer_ui(defaults):
     log_view.setFixedHeight(120); log_view.setVisible(False)
     def _toggle_log(on):
         log_view.setVisible(on); btn_log.setText(("▾" if on else "▸") + " ログ")
+        _refit()
     btn_log.toggled.connect(_toggle_log)
     root.addWidget(btn_log, 0, QtCore.Qt.AlignLeft); root.addWidget(log_view)
 
     # --- フッター (主要操作=アクセント色で1つだけ際立たせる) ---
+    root.addStretch(1)   # 余白はここに集約 (上の隙間が散らばらない・縮小と併用)
     foot = QtWidgets.QHBoxLayout(); foot.addStretch(1)
     btn_close = QtWidgets.QPushButton("閉じる")
     btn_install = QtWidgets.QPushButton("インストール"); btn_install.setObjectName("primary")
