@@ -657,11 +657,11 @@ def _show_installer_ui(defaults):
             pass
         return None
 
-    # --- 一貫した限定パレット (洗練の土台) ---
-    BG, CARD, FIELD = "#1e2024", "#2a2d31", "#16171a"
-    FG, MUTE, LINE = "#e8eaed", "#9aa0a6", "#3a3d42"
+    # --- パレット (ツールと共通: 背景 #2b2b2b / 入力欄 #3a3a3a) ---
+    BG, CARD, FIELD = "#2b2b2b", "#2b2b2b", "#3a3a3a"
+    FG, MUTE, LINE = "#e8e8e8", "#9a9a9a", "#3a3a3a"
     ACCENT, ACCENT_H = "#4f8fd0", "#5fa0e0"
-    OKC, ERRC = "#3fae6e", "#e0574d"
+    OKC, ERRC, LOGBG = "#3fae6e", "#e0574d", "#242424"
 
     CSS = (
         "QDialog{background:%(BG)s;}"
@@ -674,17 +674,18 @@ def _show_installer_ui(defaults):
         "border-radius:6px;padding:7px 9px;font-size:12px;selection-background-color:%(ACCENT)s;}"
         "QLineEdit:focus,QComboBox:focus{border:1px solid %(ACCENT)s;}"
         "QComboBox::drop-down{border:0;width:18px;}"
-        "QPlainTextEdit{background:%(FIELD)s;color:#aeb6c2;border:1px solid %(LINE)s;"
+        "QPlainTextEdit{background:%(LOGBG)s;color:#c8ccd2;border:1px solid %(LINE)s;"
         "border-radius:6px;padding:6px;font-family:Consolas,'Courier New',monospace;font-size:11px;}"
         "QPushButton{background:transparent;color:%(MUTE)s;border:1px solid %(LINE)s;"
         "border-radius:6px;padding:8px 16px;font-size:12px;}"
-        "QPushButton:hover{color:%(FG)s;border-color:#55585e;}"
+        "QPushButton:hover{color:%(FG)s;border-color:#555555;}"
         "QPushButton#primary{background:%(ACCENT)s;color:#ffffff;border:0;font-weight:600;padding:9px 20px;}"
         "QPushButton#primary:hover{background:%(ACCENT_H)s;}"
-        "QPushButton#primary:disabled{background:#3a4047;color:#7d828a;}"
+        "QPushButton#primary:disabled{background:#3a3a3a;color:#7d7d7d;}"
         "QToolButton{background:transparent;color:%(MUTE)s;border:0;font-size:11px;padding:2px;}"
         "QToolButton:hover{color:%(FG)s;}"
-    ) % dict(BG=BG, CARD=CARD, FIELD=FIELD, FG=FG, MUTE=MUTE, LINE=LINE, ACCENT=ACCENT, ACCENT_H=ACCENT_H)
+    ) % dict(BG=BG, CARD=CARD, FIELD=FIELD, FG=FG, MUTE=MUTE, LINE=LINE,
+             ACCENT=ACCENT, ACCENT_H=ACCENT_H, LOGBG=LOGBG)
 
     dlg = QtWidgets.QDialog(_maya_main_window())
     dlg.setWindowTitle("MayaTools インストーラ")
@@ -696,9 +697,14 @@ def _show_installer_ui(defaults):
 
     def _refit():
         # 展開/折りたたみ後にウィンドウを内容の高さへフィットし直す。
-        # これが無いと「展開→折りたたみ」で余った高さが隙間として残る (縮まらない)。
-        root.activate()
-        dlg.resize(dlg.width(), dlg.sizeHint().height())
+        # 直後だと layout が古い sizeHint を返し「折りたたんでも縮まない」(実機 Maya で発生)。
+        # singleShot(0) で1フレーム遅延し、レイアウト確定後に縮める。
+        def _do():
+            dlg.setMinimumHeight(0)
+            dlg.layout().invalidate()   # 古い sizeHint キャッシュを破棄 (実機でこれが無いと縮まない)
+            dlg.layout().activate()
+            dlg.resize(dlg.width(), dlg.sizeHint().height())
+        QtCore.QTimer.singleShot(0, _do)
 
     # --- ヘッダー (明快な階層: 大きな見出し + 控えめな説明) ---
     head = QtWidgets.QVBoxLayout(); head.setSpacing(3)
