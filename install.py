@@ -753,6 +753,37 @@ def _run_install(token, owner, repo, source_mode, ref, cache_dir, run_sync,
             "synced": synced, "token_set": bool(eff_token)}
 
 
+def _apply_token(token, cache_dir, log):
+    """既存インストールの token だけを更新し、認証確認してツールの有効/無効を反映する (軽量)。
+
+    フル install と違い bootstrap の再配置や Maya.env 変更はしない。token を config に書いて
+    updater を回すだけ。有効なら live が復活、無効ならツール無効のまま。返り値 dict。
+    """
+    new_cache = _expand(cache_dir) if cache_dir else _default_cache()
+    cfg_path = os.path.join(new_cache, "bootstrap", "config.json")
+    if not os.path.isfile(cfg_path):
+        return {"ok": False, "reason": "no_install"}
+    try:
+        cfg = json.load(open(cfg_path, encoding="utf-8"))
+    except Exception:
+        return {"ok": False, "reason": "no_install"}
+    if token:
+        cfg["token"] = token
+    if not (cfg.get("token") or "").strip():
+        return {"ok": False, "reason": "no_token"}
+    with open(cfg_path, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=2)
+    log("トークンを更新しました。認証を確認中…")
+    boot = os.path.join(new_cache, "bootstrap")
+    if boot not in sys.path:
+        sys.path.insert(0, boot)
+    sys.modules.pop("mayatools_updater", None)
+    import mayatools_updater
+    mayatools_updater.run(cfg_path, blocking=True)   # 認証確認 → 有効化/無効化
+    enabled = mayatools_updater._is_valid_payload(os.path.join(new_cache, "live"))
+    return {"ok": True, "enabled": enabled}
+
+
 def _show_installer_ui(defaults):
     """PySide のインストーラ窓を出す。PySide が無い/GUI 無しなら例外を投げる (呼び側で headless へ)。"""
     try:
@@ -965,13 +996,17 @@ def _show_installer_ui(defaults):
     btn_log.toggled.connect(_toggle_log)
     root.addWidget(btn_log, 0, QtCore.Qt.AlignLeft); root.addWidget(log_view)
 
-    # --- フッター (主要操作=アクセント色で1つだけ際立たせる) ---
-    root.addStretch(1)   # 余白はここに集約 (上の隙間が散らばらない・縮小と併用)
-    foot = QtWidgets.QHBoxLayout(); foot.addStretch(1)
+    # --- フッター (閉じる左 / トークン適用・インストール右。主操作=インストールのみアクセント) ---
+    # ※ stretch は入れない。内容にフィットさせる (_refit) ので、入れるとフッター上に隙間が出る。
+    foot = QtWidgets.QHBoxLayout(); foot.setSpacing(8)
     btn_close = QtWidgets.QPushButton("閉じる")
+    btn_close.setCursor(QtCore.Qt.PointingHandCursor)
+    btn_apply = QtWidgets.QPushButton("トークンを適用")
+    btn_apply.setCursor(QtCore.Qt.PointingHandCursor)
     btn_install = QtWidgets.QPushButton("インストール"); btn_install.setObjectName("primary")
     btn_install.setCursor(QtCore.Qt.PointingHandCursor)
-    foot.addWidget(btn_close); foot.addWidget(btn_install)
+    foot.addWidget(btn_close); foot.addStretch(1)
+    foot.addWidget(btn_apply); foot.addWidget(btn_install)
     root.addLayout(foot)
 
     def _log(msg):
@@ -1007,7 +1042,32 @@ def _show_installer_ui(defaults):
         finally:
             btn_install.setEnabled(True)
 
+    def _on_apply_token():
+        btn_apply.setEnabled(False); btn_install.setEnabled(False)
+        if not btn_log.isChecked():
+            btn_log.setChecked(True)
+        _set_status("run", "トークンを適用中…")
+        _log("トークン適用を開始…")
+        try:
+            res = _apply_token(ed_token.text().strip(), ed_cache.text().strip(), _log)
+            if not res.get("ok"):
+                if res.get("reason") == "no_install":
+                    _set_status("warn", "まだインストールされていません。先に［インストール］を実行してください。")
+                else:
+                    _set_status("warn", "トークンを入力してください。")
+            elif res.get("enabled"):
+                _set_status("ok", "✓ トークン有効 — ツールを有効化しました。Maya を再起動すると反映されます。")
+            else:
+                _set_status("err", "✗ トークンが無効です — ツールは無効のままです。有効なトークンを入力してください。")
+        except Exception:
+            import traceback
+            _set_status("err", "✗ エラーが発生しました。ログを確認してください。")
+            _log(traceback.format_exc())
+        finally:
+            btn_apply.setEnabled(True); btn_install.setEnabled(True)
+
     btn_install.clicked.connect(_on_install)
+    btn_apply.clicked.connect(_on_apply_token)
     btn_close.clicked.connect(dlg.close)
     dlg.show()
     dlg.raise_()
