@@ -807,11 +807,13 @@ def _show_installer_ui(defaults):
 
     # --- パレット (scripts/mtui.py と同じ統一トークン。install.py は自己完結ゆえ値を複製) ---
     #   深さ3段: 背景#2b2b2b → カード#3a3a3a → 入力欄#2a2a2a(沈める)。青#4f8fd0 / 角丸4px。
-    BG, CARD, FIELD = "#2b2b2b", "#3a3a3a", "#2a2a2a"
+    # 背景とカード(ヘッダー的な面)を入れ替え: 背景を明るく #3a3a3a / カードを暗く #2b2b2b。
+    # 入れ替えると入力欄がカードと同色で消えるので、入力欄も一段暗くして沈ませる。
+    BG, CARD, FIELD = "#3a3a3a", "#2b2b2b", "#242424"
     FG, MUTE = "#e0e0e0", "#a0a0a0"
     LINE, DIVIDER = "#1f1f1f", "#555555"
     ACCENT, ACCENT_H = "#4f8fd0", "#5fa0e0"
-    OKC, ERRC, LOGBG = "#4caf50", "#dc3545", "#242424"
+    OKC, ERRC, LOGBG = "#4caf50", "#dc3545", "#1e1e1e"
 
     CSS = (
         "QDialog{background:%(BG)s;}"
